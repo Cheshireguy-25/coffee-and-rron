@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Tickets - Exportación de Café</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      background-color: #f5f0e1;
+      font-family: 'Roboto', sans-serif;
+      color: #3e2723;
+    }
+    h1, h3 {
+      font-family: 'Playfair Display', serif;
+      color: #3e2723;
+    }
+    .card {
+      background-color: #fff8f0;
+      border: 1px solid #e0c097;
+    }
+    .btn-coffee {
+      background-color: #6f4e37;
+      color: white;
+    }
+    .btn-coffee:hover {
+      background-color: #5a3e2a;
+    }
+    .fa-coffee {
+      color: #6f4e37;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container py-4" id="app">
+    <h1 class="text-center mb-4"><i class="fas fa-coffee"></i>Gestión de Tickets - Exportación de Café</h1>
+    <!-- Login Form -->
+    <div id="loginSection" class="card p-4 mb-4">
+      <h3><i class="fas fa-sign-in-alt"></i> Login</h3>
+      <input id="email" class="form-control mb-2" type="email" placeholder="Correo electrónico">
+      <input id="password" class="form-control mb-2" type="password" placeholder="Contraseña">
+      <button class="btn btn-coffee" onclick="login()">Iniciar Sesión</button>
+      <p class="mt-2">¿No tienes cuenta? <a href="#" onclick="toggleSection('registerSection')">Regístrate</a></p>
+      <p><a href="#" onclick="recoverPassword()">¿Olvidaste tu contraseña?</a></p>
+    </div>
+
+    <!-- Register Form -->
+    <div id="registerSection" class="card p-4 mb-4 d-none">
+      <h3><i class="fas fa-user-plus"></i> Registro</h3>
+      <input id="regEmail" class="form-control mb-2" type="email" placeholder="Correo electrónico">
+      <input id="regPassword" class="form-control mb-2" type="password" placeholder="Contraseña">
+      <button class="btn btn-coffee" onclick="register()">Registrarse</button>
+      <p class="mt-2"><a href="#" onclick="toggleSection('loginSection')">Volver a Login</a></p>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="d-none">
+      <button class="btn btn-danger float-end" onclick="logout()">Cerrar sesión</button>
+
+      <!-- Crear Ticket -->
+      <div class="card p-4 mb-4">
+        <h3><i class="fas fa-plus-circle"></i> Crear Nuevo Ticket</h3>
+        <input id="titulo" class="form-control mb-2" placeholder="Título del Pedido">
+        <textarea id="descripcion" class="form-control mb-2" placeholder="Descripción del Pedido"></textarea>
+        <select id="prioridad" class="form-control mb-2">
+          <option value="Alta">Alta</option>
+          <option value="Media">Media</option>
+          <option value="Baja">Baja</option>
+        </select>
+        <select id="estado" class="form-control mb-2">
+          <option value="Abierto" selected>Abierto</option>
+          <option value="Cerrado">Cerrado</option>
+        </select>
+        <input id="cliente" class="form-control mb-2" placeholder="Nombre del Cliente">
+        <input id="kg" type="number" class="form-control mb-2" placeholder="Kilogramos de Café">
+        <select id="tipo" class="form-control mb-2">
+          <option>Arábica</option>
+          <option>Robusta</option>
+          <option>Mezcla</option>
+          <option>Descafeinado</option>
+        </select>
+        <input id="pais" class="form-control mb-2" placeholder="País de Envío">
+        <button class="btn btn-coffee" onclick="crearTicket()">Crear Ticket</button>
+      </div>
+
+      <!-- Lista de Tickets -->
+      <div class="mb-4">
+        <h3><i class="fas fa-clipboard-list"></i> Tickets Activos</h3>
+        <div id="ticketList" class="row"></div>
+        <button class="btn btn-success mt-3" onclick="exportarTickets()">
+          <i class="fa-solid fa-file-export"></i> Exportar Tickets
+        </button>
+      </div>
+
+      <!-- Gráfico de Estadísticas -->
+      <div class="card p-4">
+        <h3><i class="fas fa-chart-bar"></i> Estadísticas por Prioridad</h3>
+        <canvas id="chartPrioridad"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDrvr8dgMfWOw3iwuQXAQsMGU5d174LzXk",
+      authDomain: "cafe-y-ron-ejercicio.firebaseapp.com",
+      projectId: "cafe-y-ron-ejercicio",
+      storageBucket: "cafe-y-ron-ejercicio.firebasestorage.app",
+      messagingSenderId: "445825060735",
+      appId: "1:445825060735:web:a4dc02044f9739037c544a"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    function toggleSection(section) {
+      document.getElementById('loginSection').classList.add('d-none');
+      document.getElementById('registerSection').classList.add('d-none');
+      document.getElementById(section).classList.remove('d-none');
+    }
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById('loginSection').classList.add('d-none');
+        document.getElementById('registerSection').classList.add('d-none');
+        document.getElementById('mainApp').classList.remove('d-none');
+        cargarTickets();
+      } else {
+        document.getElementById('mainApp').classList.add('d-none');
+        document.getElementById('loginSection').classList.remove('d-none');
+      }
+    });
+
+    function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) return alert("Ingrese correo y contraseña");
+      auth.signInWithEmailAndPassword(email, password).catch(e => alert(e.message));
+    }
+
+    function register() {
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      if (!email || !password) return alert("Complete ambos campos");
+      auth.createUserWithEmailAndPassword(email, password).catch(e => alert(e.message));
+    }
+
+    function logout() {
+      auth.signOut();
+    }
+
+    function recoverPassword() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) return alert('Por favor, introduce tu correo.');
+      auth.sendPasswordResetEmail(email).then(() => alert('Correo enviado para recuperar contraseña.')).catch(e => alert(e.message));
+    }
+
+    let folioCount = 0;
+
+    async function crearTicket() {
+      folioCount++;
+      const folio = `COFFEE-${folioCount.toString().padStart(3, '0')}`;
+      const ticket = {
+        folio,
+        titulo: document.getElementById('titulo').value,
+        descripcion: document.getElementById('descripcion').value,
+        prioridad: document.getElementById('prioridad').value,
+        estado: document.getElementById('estado').value,
+        cliente: document.getElementById('cliente').value,
+        kg: parseFloat(document.getElementById('kg').value),
+        tipo: document.getElementById('tipo').value,
+        pais: document.getElementById('pais').value,
+        fecha: new Date().toISOString()
+      };
+      await db.collection('tickets').add(ticket);
+      cargarTickets();
+    }
+
+    async function cargarTickets() {
+      const container = document.getElementById('ticketList');
+      container.innerHTML = '';
+      const snapshot = await db.collection('tickets').get();
+      const prioridades = { Alta: 0, Media: 0, Baja: 0 };
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        prioridades[data.prioridad]++;
+        const div = document.createElement('div');
+        div.className = 'col-md-4 mb-3';
+        div.innerHTML = `
+          <div class="card p-3">
+            <h5>${data.folio}</h5>
+            <p><strong>Cliente:</strong> ${data.cliente}</p>
+            <p><strong>Kg:</strong> ${data.kg}</p>
+            <p><strong>Tipo:</strong> ${data.tipo}</p>
+            <p><strong>Prioridad:</strong> ${data.prioridad}</p>
+            <button class="btn btn-danger btn-sm" onclick="eliminarTicket('${doc.id}')"><i class="fa fa-trash"></i> Eliminar</button>
+          </div>`;
+        container.appendChild(div);
+      });
+      renderChart(prioridades);
+    }
+
+    async function eliminarTicket(id) {
+      await db.collection('tickets').doc(id).delete();
+      cargarTickets();
+    }
+
+    function exportarTickets() {
+      db.collection('tickets').get().then(snapshot => {
+        let csv = 'Folio,Titulo,Descripción,Prioridad,Estado,Cliente,Kilogramos,Tipo,País,Fecha\n';
+        snapshot.forEach(doc => {
+          const t = doc.data();
+          csv += `${t.folio},"${t.titulo}","${t.descripcion}",${t.prioridad},${t.estado},${t.cliente},${t.kg},${t.tipo},${t.pais},${t.fecha}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'tickets.csv';
+        a.click();
+      });
+    }
+
+    function renderChart(data) {
+      const ctx = document.getElementById('chartPrioridad').getContext('2d');
+      if (window.barChart) window.barChart.destroy();
+      window.barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Alta', 'Media', 'Baja'],
+          datasets: [{
+            label: 'Cantidad de Tickets',
+            data: [data.Alta, data.Media, data.Baja],
+            backgroundColor: ['#c0392b', '#f39c12', '#27ae60']
+          }]
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>
